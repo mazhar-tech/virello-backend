@@ -658,7 +658,7 @@ router.get('/search/suggestions', [
 });
 
 // @route   POST /api/products/upload-image
-// @desc    Upload product image to Cloudflare Images
+// @desc    Upload product image to local storage
 // @access  Private (Admin only)
 router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req, res) => {
   try {
@@ -669,71 +669,17 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
       });
     }
 
-    // Check if Cloudflare configuration is available
-    if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID) {
-      // Fallback to local storage if Cloudflare is not configured
-      const imageUrl = `/uploads/${req.file.filename}`;
-      
-      console.log('🔧 Products: Using local storage fallback:', imageUrl);
-      
-      res.status(200).json({
-        message: 'Image uploaded to local storage (Cloudflare not configured)',
-        imageUrl: imageUrl,
-        filename: req.file.filename,
-        storage: 'local'
-      });
-      return;
-    }
-
-    // Try to upload to Cloudflare Images, but fallback to local storage if it fails
-    try {
-      const CloudflareImagesService = require('../lib/cloudflareImages');
-      const cloudflareImages = new CloudflareImagesService();
-      
-      console.log('🔧 Products: Uploading to Cloudflare Images:', req.file.filename);
-      
-      const uploadResult = await cloudflareImages.uploadImageFromPath(req.file.path, {
-        metadata: {
-          uploadedBy: req.user.id,
-          originalFilename: req.file.originalname,
-          uploadedAt: new Date().toISOString(),
-          purpose: 'product-image'
-        }
-      });
-
-      // Clean up local file after successful upload
-      fs.unlinkSync(req.file.path);
-      
-      console.log('✅ Products: Cloudflare upload successful:', uploadResult.imageId);
-      
-      res.status(200).json({
-        message: 'Image uploaded to Cloudflare Images successfully',
-        imageUrl: uploadResult.imageUrl,
-        imageId: uploadResult.imageId,
-        filename: uploadResult.filename,
-        storage: 'cloudflare',
-        optimizedUrls: {
-          public: cloudflareImages.getOptimizedUrl(uploadResult.imageId, 'public'),
-          thumbnail: cloudflareImages.getOptimizedUrl(uploadResult.imageId, 'thumbnail'),
-          webp: cloudflareImages.getOptimizedUrl(uploadResult.imageId, 'webp')
-        }
-      });
-    } catch (cloudflareError) {
-      console.error('❌ Cloudflare upload failed, falling back to local storage:', cloudflareError.message);
-      
-      // Fallback to local storage
-      const imageUrl = `/uploads/${req.file.filename}`;
-      
-      console.log('🔧 Products: Using local storage fallback after Cloudflare error:', imageUrl);
-      
-      res.status(200).json({
-        message: 'Image uploaded to local storage (Cloudflare upload failed)',
-        imageUrl: imageUrl,
-        filename: req.file.filename,
-        storage: 'local',
-        cloudflareError: cloudflareError.message
-      });
-    }
+    // Use local storage
+    const imageUrl = `/uploads/${req.file.filename}`;
+    
+    console.log('🔧 Products: Using local storage:', imageUrl);
+    
+    res.status(200).json({
+      message: 'Image uploaded to local storage successfully',
+      imageUrl: imageUrl,
+      filename: req.file.filename,
+      storage: 'local'
+    });
   } catch (error) {
     console.error('❌ Image upload error:', error);
     

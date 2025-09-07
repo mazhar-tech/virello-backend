@@ -129,7 +129,7 @@ router.post('/register', [
     console.log('✅ User saved to database, sending OTP...');
 
     // Send OTP via preferred method
-    const otpMethod = process.env.OTP_METHOD || 'email'; // console, email, sms
+    const otpMethod = process.env.OTP_METHOD || 'email'; // console, email
     let otpResult;
     
     // Use original email from request body (before normalization) for sending
@@ -142,9 +142,6 @@ router.post('/register', [
     if (otpMethod === 'email') {
       // Send email OTP to original email (before normalization)
       otpResult = await sendOTP(originalEmail, verificationCode, 'email');
-    } else if (otpMethod === 'sms') {
-      // Send SMS OTP
-      otpResult = await sendOTP(user.phone, verificationCode, 'sms');
     } else {
       // Send console OTP (for development)
       otpResult = await sendOTP(user.phone, verificationCode, 'console');
@@ -345,9 +342,6 @@ router.post('/resend-verification', [
     if (otpMethod === 'email') {
       // Send email OTP to original email (before normalization)
       otpResult = await sendOTP(originalEmail, verificationCode, 'email');
-    } else if (otpMethod === 'sms') {
-      // Send SMS OTP
-      otpResult = await sendOTP(user.phone, verificationCode, 'sms');
     } else {
       // Send console OTP (for development)
       otpResult = await sendOTP(user.phone, verificationCode, 'console');
@@ -729,7 +723,7 @@ router.post('/change-password', [
 });
 
 // @route   POST /api/auth/forgot-password
-// @desc    Send password reset email
+// @desc    Send password reset OTP
 // @access  Public
 router.post('/forgot-password', [
   body('email')
@@ -738,96 +732,267 @@ router.post('/forgot-password', [
     .withMessage('Please provide a valid email')
 ], async (req, res) => {
   try {
+    console.log('📥 Forgot password request received:', JSON.stringify(req.body, null, 2));
+    
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('❌ Forgot password validation errors:', errors.array());
       return res.status(400).json({
         error: 'Validation Error',
+        message: 'Please check your input data',
         details: errors.array()
       });
     }
 
     const { email } = req.body;
 
+    console.log('🔍 Looking for user with email:', email);
+
+    // Find user by normalized email
     const user = await User.findOne({ email, isActive: true });
     if (!user) {
-      // Don't reveal if user exists or not
+      console.log('❌ User not found with email:', email);
+      // Don't reveal if user exists or not for security
       return res.json({
-        message: 'If an account with that email exists, a password reset link has been sent'
+        success: true,
+        message: 'If an account with that email exists, a password reset OTP has been sent'
       });
     }
 
-    // Generate reset token
-    const resetToken = require('crypto').randomBytes(32).toString('hex');
-    user.passwordResetToken = resetToken;
-    user.passwordResetExpires = Date.now() + 3600000; // 1 hour
+    console.log('✅ User found:', user.email);
+
+    // Generate OTP for password reset
+    const resetOTP = generateOTP();
+    user.passwordResetOTP = resetOTP;
+    user.passwordResetOTPExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     await user.save();
 
-    // TODO: Send email with reset link
-    // For now, just return success message
+    console.log('✅ Reset OTP generated and saved to database');
+
+    // Send OTP via preferred method
+    const otpMethod = process.env.OTP_METHOD || 'email';
+    let otpResult;
+    
+    // Use original email from request body (before normalization) for sending
+    const originalEmail = req.body.email;
+    
+    console.log('📧 Email comparison (forgot password):');
+    console.log('📧 Original email (for sending):', originalEmail);
+    console.log('📧 Normalized email (in DB):', user.email);
+    
+    if (otpMethod === 'email') {
+      // Send email OTP to original email (before normalization)
+      otpResult = await sendOTP(originalEmail, resetOTP, 'email');
+    } else {
+      // Send console OTP (for development)
+      otpResult = await sendOTP(user.phone, resetOTP, 'console');
+    }
+    
+    if (!otpResult.success) {
+      console.error('❌ Failed to send reset OTP:', otpResult.error);
+      return res.status(500).json({
+        error: 'OTP Error',
+        message: 'Failed to send password reset OTP',
+        details: otpResult.error
+      });
+    }
+    
+    console.log(`✅ Reset OTP sent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+
     res.json({
-      message: 'If an account with that email exists, a password reset link has been sent'
+      success: true,
+      message: 'If an account with that email exists, a password reset OTP has been sent'
     });
 
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('❌ Forgot password error:', error);
     res.status(500).json({
       error: 'Server Error',
-      details: 'Failed to process password reset request'
+      message: 'Failed to process password reset request',
+      details: error.message
     });
   }
 });
 
 // @route   POST /api/auth/reset-password
-// @desc    Reset password with token
+// @desc    Reset password with OTP
 // @access  Public
 router.post('/reset-password', [
-  body('token')
-    .notEmpty()
-    .withMessage('Reset token is required'),
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email'),
+  body('otp')
+    .isLength({ min: 6, max: 6 })
+    .withMessage('OTP must be 6 digits'),
   body('newPassword')
     .isLength({ min: 6 })
     .withMessage('New password must be at least 6 characters long')
 ], async (req, res) => {
   try {
+    console.log('📥 Reset password request received:', JSON.stringify(req.body, null, 2));
+    
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('❌ Reset password validation errors:', errors.array());
       return res.status(400).json({
         error: 'Validation Error',
+        message: 'Please check your input data',
         details: errors.array()
       });
     }
 
-    const { token, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body;
 
-    const user = await User.findOne({
-      passwordResetToken: token,
-      passwordResetExpires: { $gt: Date.now() }
-    });
+    console.log('🔍 Looking for user with email:', email);
+    console.log('🔢 OTP provided:', otp);
 
+    // Find user by normalized email
+    const user = await User.findOne({ email, isActive: true });
     if (!user) {
-      return res.status(400).json({
-        error: 'Invalid token',
-        details: 'Password reset token is invalid or has expired'
+      console.log('❌ User not found with email:', email);
+      return res.status(404).json({
+        error: 'User not found',
+        details: 'User does not exist'
       });
     }
 
-    // Update password and clear reset token
+    console.log('✅ User found:', user.email);
+    console.log('📧 User reset OTP:', user.passwordResetOTP);
+    console.log('⏰ OTP expires:', user.passwordResetOTPExpires);
+
+    if (!user.passwordResetOTP || !user.passwordResetOTPExpires) {
+      return res.status(400).json({
+        error: 'No reset OTP',
+        details: 'No password reset OTP found. Please request a new one.'
+      });
+    }
+
+    if (new Date() > user.passwordResetOTPExpires) {
+      return res.status(400).json({
+        error: 'OTP expired',
+        details: 'Password reset OTP has expired. Please request a new one.'
+      });
+    }
+
+    if (user.passwordResetOTP !== otp) {
+      return res.status(400).json({
+        error: 'Invalid OTP',
+        details: 'Invalid password reset OTP'
+      });
+    }
+
+    // Update password and clear reset OTP
     user.password = newPassword;
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
+    user.passwordResetOTP = null;
+    user.passwordResetOTPExpires = null;
     await user.save();
 
+    console.log('✅ Password reset successfully for user:', user.email);
+
     res.json({
+      success: true,
       message: 'Password reset successfully'
     });
 
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('❌ Reset password error:', error);
     res.status(500).json({
       error: 'Server Error',
-      details: 'Failed to reset password'
+      message: 'Failed to reset password',
+      details: error.message
+    });
+  }
+});
+
+// @route   POST /api/auth/resend-reset-otp
+// @desc    Resend password reset OTP
+// @access  Public
+router.post('/resend-reset-otp', [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email')
+], async (req, res) => {
+  try {
+    console.log('📥 Resend reset OTP request received:', JSON.stringify(req.body, null, 2));
+    
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.error('❌ Resend reset OTP validation errors:', errors.array());
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Please check your input data',
+        details: errors.array()
+      });
+    }
+
+    const { email } = req.body;
+
+    console.log('🔍 Looking for user with email:', email);
+
+    const user = await User.findOne({ email, isActive: true });
+    if (!user) {
+      console.log('❌ User not found with email:', email);
+      return res.status(404).json({
+        error: 'User not found',
+        details: 'User does not exist'
+      });
+    }
+
+    console.log('✅ User found:', user.email);
+
+    // Generate new reset OTP
+    const resetOTP = generateOTP();
+    user.passwordResetOTP = resetOTP;
+    user.passwordResetOTPExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await user.save();
+
+    console.log('✅ New reset OTP generated and saved to database');
+
+    // Send OTP via preferred method
+    const otpMethod = process.env.OTP_METHOD || 'email';
+    let otpResult;
+    
+    // Use original email from request body (before normalization) for sending
+    const originalEmail = req.body.email;
+    
+    console.log('📧 Email comparison (resend reset OTP):');
+    console.log('📧 Original email (for sending):', originalEmail);
+    console.log('📧 Normalized email (in DB):', user.email);
+    
+    if (otpMethod === 'email') {
+      // Send email OTP to original email (before normalization)
+      otpResult = await sendOTP(originalEmail, resetOTP, 'email');
+    } else {
+      // Send console OTP (for development)
+      otpResult = await sendOTP(user.phone, resetOTP, 'console');
+    }
+    
+    if (!otpResult.success) {
+      console.error('❌ Failed to send reset OTP:', otpResult.error);
+      return res.status(500).json({
+        error: 'OTP Error',
+        message: 'Failed to send password reset OTP',
+        details: otpResult.error
+      });
+    }
+    
+    console.log(`✅ Reset OTP resent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+
+    res.json({
+      success: true,
+      message: 'Password reset OTP sent successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Resend reset OTP error:', error);
+    res.status(500).json({
+      error: 'Server Error',
+      message: 'Failed to send password reset OTP',
+      details: error.message
     });
   }
 });
@@ -882,66 +1047,6 @@ router.post('/refresh', auth, async (req, res) => {
   }
 });
 
-// @route   POST /api/auth/forgot-password
-// @desc    Send password reset email
-// @access  Public
-router.post('/forgot-password', [
-  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email address')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        details: errors.array()
-      });
-    }
-
-    const { email } = req.body;
-    console.log('📥 Forgot password request received:', JSON.stringify(req.body, null, 2));
-
-    // Find user by email
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found with this email address'
-      });
-    }
-
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    // Update user with reset token
-    user.passwordResetToken = resetToken;
-    user.passwordResetExpires = resetTokenExpires;
-    await user.save();
-
-    // Send password reset email
-    const { sendPasswordResetEmail } = require('../lib/emailService');
-    const emailResult = await sendPasswordResetEmail(email, resetToken);
-
-    if (emailResult.success) {
-      res.status(200).json({
-        success: true,
-        message: 'Password reset link sent to your email'
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to send password reset email'
-      });
-    }
-  } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
 
 // @route   POST /api/auth/change-password
 // @desc    Change password (requires authentication)

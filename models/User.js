@@ -70,7 +70,9 @@ const userSchema = new mongoose.Schema({
   emailVerificationCode: String,
   emailVerificationExpires: Date,
   passwordResetToken: String,
-  passwordResetExpires: Date
+  passwordResetExpires: Date,
+  passwordResetOTP: String,
+  passwordResetOTPExpires: Date
 }, {
   timestamps: true
 });
@@ -101,10 +103,12 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;
-  delete user.emailVerificationToken;
+  delete user.emailVerificationCode;
   delete user.emailVerificationExpires;
   delete user.passwordResetToken;
   delete user.passwordResetExpires;
+  delete user.passwordResetOTP;
+  delete user.passwordResetOTPExpires;
   return user;
 };
 
