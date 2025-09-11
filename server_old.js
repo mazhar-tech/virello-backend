@@ -17,6 +17,7 @@ const orderRoutes = require('./routes/orders');
 const userRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
 
+
 // Security middleware with CORS-friendly configuration
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -82,8 +83,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
+    uptime: process.uptime()
   });
 });
 
@@ -93,6 +93,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -187,14 +188,12 @@ const startServer = async () => {
 
 startServer();
 
-// Graceful shutdown - Fixed version
+// Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
   try {
-    if (mongoose.connection.readyState === 1) {
-      await mongoose.connection.close();
-      console.log('MongoDB connection closed');
-    }
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed');
     process.exit(0);
   } catch (error) {
     console.error('Error closing MongoDB connection:', error);
@@ -205,13 +204,13 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully');
   try {
-    if (mongoose.connection.readyState === 1) {
-      await mongoose.connection.close();
-      console.log('MongoDB connection closed');
-    }
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed');
     process.exit(0);
   } catch (error) {
     console.error('Error closing MongoDB connection:', error);
     process.exit(1);
   }
 });
+
+

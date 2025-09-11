@@ -8,7 +8,6 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -36,10 +35,10 @@ app.use(helmet({
 }));
 app.use(compression());
 
-// Rate limiting
+// Rate limiting (reduced for serverless)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 50, // Reduced limit for serverless
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -69,10 +68,6 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Static file serving for images
-app.use('/images', express.static('public/images'));
-app.use('/uploads', express.static('public/uploads'));
 
 // Logging middleware
 app.use(morgan('combined'));
@@ -122,20 +117,28 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// MongoDB connection
+// MongoDB connection for serverless
+let cachedConnection = null;
+
 const connectDB = async () => {
+  if (cachedConnection) {
+    return cachedConnection;
+  }
+
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/virello-food';
-    console.log('🔗 Attempting to connect to MongoDB...');
-    console.log('📡 URI:', mongoURI);
+    const mongoURI = process.env.MONGODB_URI;
+    if (!mongoURI) {
+      console.log('⚠️  MONGODB_URI not set, running in mock mode');
+      return null;
+    }
     
-    await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 30000, // 30 second timeout
-      socketTimeoutMS: 60000, // 60 second timeout
-      connectTimeoutMS: 30000, // 30 second connection timeout
-      maxPoolSize: 10,
+    const connection = await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 10000, // Reduced timeout for serverless
+      socketTimeoutMS: 30000,
+      connectTimeoutMS: 10000,
+      maxPoolSize: 5, // Reduced pool size for serverless
       minPoolSize: 1,
-      maxIdleTimeMS: 30000,
+      maxIdleTimeMS: 10000,
       retryWrites: true,
       retryReads: true,
       w: 'majority',
@@ -143,75 +146,16 @@ const connectDB = async () => {
     });
     
     console.log('✅ MongoDB connected successfully');
-    
-    // Set up connection event listeners
-    mongoose.connection.on('error', (err) => {
-      console.error('❌ MongoDB connection error:', err.message);
-    });
-    
-    mongoose.connection.on('disconnected', () => {
-      console.log('⚠️  MongoDB disconnected');
-    });
-    
-    mongoose.connection.on('reconnected', () => {
-      console.log('✅ MongoDB reconnected');
-    });
-    
-    return true;
+    cachedConnection = connection;
+    return connection;
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
-    console.log('⚠️  Server will run without database connection');
-    console.log('💡 To fix this, either:');
-    console.log('   1. Install MongoDB locally: https://docs.mongodb.com/manual/installation/');
-    console.log('   2. Use MongoDB Atlas: https://www.mongodb.com/cloud/atlas');
-    console.log('   3. Set MONGODB_URI environment variable');
-    console.log('   4. Check your network connection and firewall settings');
-    console.log('   5. Try using a local MongoDB instance: mongodb://localhost:27017/virello-food');
-    return false;
+    return null;
   }
 };
 
-// Start server
-const startServer = async () => {
-  const dbConnected = await connectDB();
-  
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔗 API base: http://localhost:${PORT}/api`);
-    if (!dbConnected) {
-      console.log('⚠️  Database-dependent routes will return errors');
-    }
-  });
-};
+// Initialize database connection
+connectDB();
 
-startServer();
-
-// Graceful shutdown - Fixed version
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  try {
-    if (mongoose.connection.readyState === 1) {
-      await mongoose.connection.close();
-      console.log('MongoDB connection closed');
-    }
-    process.exit(0);
-  } catch (error) {
-    console.error('Error closing MongoDB connection:', error);
-    process.exit(1);
-  }
-});
-
-process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully');
-  try {
-    if (mongoose.connection.readyState === 1) {
-      await mongoose.connection.close();
-      console.log('MongoDB connection closed');
-    }
-    process.exit(0);
-  } catch (error) {
-    console.error('Error closing MongoDB connection:', error);
-    process.exit(1);
-  }
-});
+// Export for Vercel
+module.exports = app;
