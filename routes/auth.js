@@ -128,33 +128,40 @@ router.post('/register', [
 
     console.log('✅ User saved to database, sending OTP...');
 
-    // Send OTP via preferred method
+    // Send OTP via preferred method (asynchronously to prevent timeout)
     const otpMethod = process.env.OTP_METHOD || 'email'; // console, email
-    let otpResult;
-    
-    // Use original email from request body (before normalization) for sending
     const originalEmail = req.body.email;
     
     console.log('📧 Email comparison:');
     console.log('📧 Original email (for sending):', originalEmail);
     console.log('📧 Normalized email (in DB):', user.email);
     
-    if (otpMethod === 'email') {
-      // Send email OTP to original email (before normalization)
-      otpResult = await sendOTP(originalEmail, verificationCode, 'email');
-    } else {
-      // Send console OTP (for development)
-      otpResult = await sendOTP(user.phone, verificationCode, 'console');
-    }
-    
-    if (!otpResult.success) {
-      console.error('❌ Failed to send OTP:', otpResult.error);
-      // Still return success but log the OTP error
-    } else {
-      console.log(`✅ OTP sent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
-    }
+    // Send email asynchronously to prevent timeout
+    const sendEmailAsync = async () => {
+      try {
+        let otpResult;
+        if (otpMethod === 'email') {
+          // Send email OTP to original email (before normalization)
+          otpResult = await sendOTP(originalEmail, verificationCode, 'email');
+        } else {
+          // Send console OTP (for development)
+          otpResult = await sendOTP(user.phone, verificationCode, 'console');
+        }
+        
+        if (!otpResult.success) {
+          console.error('❌ Failed to send OTP:', otpResult.error);
+        } else {
+          console.log(`✅ OTP sent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+        }
+      } catch (error) {
+        console.error('❌ Async email sending error:', error);
+      }
+    };
 
-    console.log('✅ Registration completed successfully');
+    // Start email sending in background (don't await)
+    sendEmailAsync();
+
+    console.log('✅ Registration completed successfully (email sending in background)');
 
     res.status(201).json({
       success: true,
@@ -328,35 +335,38 @@ router.post('/resend-verification', [
     user.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     await user.save();
 
-    // Send OTP via preferred method
+    // Send OTP via preferred method (asynchronously to prevent timeout)
     const otpMethod = process.env.OTP_METHOD || 'email';
-    let otpResult;
-    
-    // Use original email from request body (before normalization) for sending
     const originalEmail = req.body.email;
     
     console.log('📧 Email comparison (resend):');
     console.log('📧 Original email (for sending):', originalEmail);
     console.log('📧 Normalized email (in DB):', user.email);
     
-    if (otpMethod === 'email') {
-      // Send email OTP to original email (before normalization)
-      otpResult = await sendOTP(originalEmail, verificationCode, 'email');
-    } else {
-      // Send console OTP (for development)
-      otpResult = await sendOTP(user.phone, verificationCode, 'console');
-    }
-    
-    if (!otpResult.success) {
-      console.error('❌ Failed to send OTP:', otpResult.error);
-      return res.status(500).json({
-        error: 'OTP Error',
-        message: 'Failed to send verification code',
-        details: otpResult.error
-      });
-    }
-    
-    console.log(`✅ New OTP sent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+    // Send email asynchronously to prevent timeout
+    const sendEmailAsync = async () => {
+      try {
+        let otpResult;
+        if (otpMethod === 'email') {
+          // Send email OTP to original email (before normalization)
+          otpResult = await sendOTP(originalEmail, verificationCode, 'email');
+        } else {
+          // Send console OTP (for development)
+          otpResult = await sendOTP(user.phone, verificationCode, 'console');
+        }
+        
+        if (!otpResult.success) {
+          console.error('❌ Failed to send OTP:', otpResult.error);
+        } else {
+          console.log(`✅ New OTP sent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+        }
+      } catch (error) {
+        console.error('❌ Async email sending error:', error);
+      }
+    };
+
+    // Start email sending in background (don't await)
+    sendEmailAsync();
 
     res.json({
       success: true,
@@ -770,35 +780,38 @@ router.post('/forgot-password', [
 
     console.log('✅ Reset OTP generated and saved to database');
 
-    // Send OTP via preferred method
+    // Send OTP via preferred method (asynchronously to prevent timeout)
     const otpMethod = process.env.OTP_METHOD || 'email';
-    let otpResult;
-    
-    // Use original email from request body (before normalization) for sending
     const originalEmail = req.body.email;
     
     console.log('📧 Email comparison (forgot password):');
     console.log('📧 Original email (for sending):', originalEmail);
     console.log('📧 Normalized email (in DB):', user.email);
     
-    if (otpMethod === 'email') {
-      // Send email OTP to original email (before normalization)
-      otpResult = await sendOTP(originalEmail, resetOTP, 'email');
-    } else {
-      // Send console OTP (for development)
-      otpResult = await sendOTP(user.phone, resetOTP, 'console');
-    }
-    
-    if (!otpResult.success) {
-      console.error('❌ Failed to send reset OTP:', otpResult.error);
-      return res.status(500).json({
-        error: 'OTP Error',
-        message: 'Failed to send password reset OTP',
-        details: otpResult.error
-      });
-    }
-    
-    console.log(`✅ Reset OTP sent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+    // Send email asynchronously to prevent timeout
+    const sendEmailAsync = async () => {
+      try {
+        let otpResult;
+        if (otpMethod === 'email') {
+          // Send email OTP to original email (before normalization)
+          otpResult = await sendOTP(originalEmail, resetOTP, 'email');
+        } else {
+          // Send console OTP (for development)
+          otpResult = await sendOTP(user.phone, resetOTP, 'console');
+        }
+        
+        if (!otpResult.success) {
+          console.error('❌ Failed to send reset OTP:', otpResult.error);
+        } else {
+          console.log(`✅ Reset OTP sent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+        }
+      } catch (error) {
+        console.error('❌ Async email sending error:', error);
+      }
+    };
+
+    // Start email sending in background (don't await)
+    sendEmailAsync();
 
     res.json({
       success: true,
@@ -952,35 +965,38 @@ router.post('/resend-reset-otp', [
 
     console.log('✅ New reset OTP generated and saved to database');
 
-    // Send OTP via preferred method
+    // Send OTP via preferred method (asynchronously to prevent timeout)
     const otpMethod = process.env.OTP_METHOD || 'email';
-    let otpResult;
-    
-    // Use original email from request body (before normalization) for sending
     const originalEmail = req.body.email;
     
     console.log('📧 Email comparison (resend reset OTP):');
     console.log('📧 Original email (for sending):', originalEmail);
     console.log('📧 Normalized email (in DB):', user.email);
     
-    if (otpMethod === 'email') {
-      // Send email OTP to original email (before normalization)
-      otpResult = await sendOTP(originalEmail, resetOTP, 'email');
-    } else {
-      // Send console OTP (for development)
-      otpResult = await sendOTP(user.phone, resetOTP, 'console');
-    }
-    
-    if (!otpResult.success) {
-      console.error('❌ Failed to send reset OTP:', otpResult.error);
-      return res.status(500).json({
-        error: 'OTP Error',
-        message: 'Failed to send password reset OTP',
-        details: otpResult.error
-      });
-    }
-    
-    console.log(`✅ Reset OTP resent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+    // Send email asynchronously to prevent timeout
+    const sendEmailAsync = async () => {
+      try {
+        let otpResult;
+        if (otpMethod === 'email') {
+          // Send email OTP to original email (before normalization)
+          otpResult = await sendOTP(originalEmail, resetOTP, 'email');
+        } else {
+          // Send console OTP (for development)
+          otpResult = await sendOTP(user.phone, resetOTP, 'console');
+        }
+        
+        if (!otpResult.success) {
+          console.error('❌ Failed to send reset OTP:', otpResult.error);
+        } else {
+          console.log(`✅ Reset OTP resent successfully via ${otpResult.method} to:`, otpMethod === 'email' ? user.email : user.phone);
+        }
+      } catch (error) {
+        console.error('❌ Async email sending error:', error);
+      }
+    };
+
+    // Start email sending in background (don't await)
+    sendEmailAsync();
 
     res.json({
       success: true,
