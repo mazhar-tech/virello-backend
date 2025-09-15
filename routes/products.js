@@ -8,37 +8,58 @@ const Product = require('../models/Product');
 const { auth, adminAuth } = require('../middleware/auth');
 const router = express.Router();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../public/uploads');
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Import cloud storage utilities
+let cloudinaryUtils = null;
+try {
+  cloudinaryUtils = require('../utils/cloudinary');
+} catch (error) {
+  console.log('Cloudinary not configured, using local storage');
+}
 
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: function (req, file, cb) {
-    // Check file type
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'), false);
+// Configure multer for file uploads
+// Use cloud storage in production, local storage in development
+const isProduction = process.env.NODE_ENV === 'production';
+const useCloudStorage = isProduction && cloudinaryUtils;
+
+let storage, upload;
+
+if (useCloudStorage) {
+  // Use Cloudinary for production
+  storage = cloudinaryUtils.storage;
+  upload = cloudinaryUtils.upload;
+} else {
+  // Use local storage for development
+  storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      const uploadDir = path.join(__dirname, '../public/uploads');
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      // Generate unique filename
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
-  }
-});
+  });
+
+  upload = multer({ 
+    storage: storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: function (req, file, cb) {
+      // Check file type
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'), false);
+      }
+    }
+  });
+}
 
 // @route   GET /api/products
 // @desc    Get all products with filtering and pagination
@@ -658,7 +679,7 @@ router.get('/search/suggestions', [
 });
 
 // @route   POST /api/products/upload-image
-// @desc    Upload product image to local storage
+// @desc    Upload product image (cloud storage in production, local in development)
 // @access  Private (Admin only)
 router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req, res) => {
   try {
@@ -669,22 +690,35 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
       });
     }
 
-    // Use local storage
-    const imageUrl = `/uploads/${req.file.filename}`;
-    
-    console.log('🔧 Products: Using local storage:', imageUrl);
+    let imageUrl, filename, storageType;
+
+    if (useCloudStorage) {
+      // Cloud storage (production)
+      imageUrl = req.file.path; // Cloudinary provides the full URL
+      filename = req.file.filename; // Cloudinary public_id
+      storageType = 'cloudinary';
+      
+      console.log('🔧 Products: Using cloud storage:', imageUrl);
+    } else {
+      // Local storage (development)
+      imageUrl = `/uploads/${req.file.filename}`;
+      filename = req.file.filename;
+      storageType = 'local';
+      
+      console.log('🔧 Products: Using local storage:', imageUrl);
+    }
     
     res.status(200).json({
-      message: 'Image uploaded to local storage successfully',
+      message: `Image uploaded to ${storageType} storage successfully`,
       imageUrl: imageUrl,
-      filename: req.file.filename,
-      storage: 'local'
+      filename: filename,
+      storage: storageType
     });
   } catch (error) {
     console.error('❌ Image upload error:', error);
     
     // Clean up local file if it exists
-    if (req.file && fs.existsSync(req.file.path)) {
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     
