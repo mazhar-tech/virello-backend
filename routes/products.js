@@ -752,7 +752,8 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
     } else {
       // Local storage (temporary solution for Railway)
       // Use Railway domain for image URLs
-      const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://virello-backend-production.up.railway.app';
+      // Ensure we always use the full Railway URL with https://
+      const baseUrl = 'https://virello-backend-production.up.railway.app';
       console.log('🔧 Base URL being used:', baseUrl);
       console.log('🔧 Filename:', req.file.filename);
       imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
