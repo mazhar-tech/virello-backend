@@ -382,6 +382,51 @@ router.post('/resend-verification', [
   }
 });
 
+// @route   GET /api/auth/test-email-config
+// @desc    Test email configuration and send test email
+// @access  Private (Admin only)
+router.get('/test-email-config', auth, adminAuth, async (req, res) => {
+  try {
+    console.log('🔧 Testing email configuration...');
+    
+    // Check environment variables
+    const emailConfig = {
+      EMAIL_SERVICE: process.env.EMAIL_SERVICE || 'not set',
+      EMAIL_USER: process.env.EMAIL_USER ? 'set' : 'not set',
+      EMAIL_PASSWORD: process.env.EMAIL_PASSWORD ? 'set' : 'not set',
+      EMAIL_FROM: process.env.EMAIL_FROM || 'not set',
+      OTP_METHOD: process.env.OTP_METHOD || 'not set',
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+      FRONTEND_URL: process.env.FRONTEND_URL || 'not set'
+    };
+    
+    console.log('📧 Email configuration:', emailConfig);
+    
+    // Test sending a simple email
+    const { sendVerificationEmail } = require('../lib/emailService');
+    const testEmail = req.user.email; // Send to admin's email
+    const testOTP = '123456';
+    
+    console.log('📤 Sending test email to:', testEmail);
+    const result = await sendVerificationEmail(testEmail, testOTP);
+    
+    res.json({
+      success: true,
+      message: 'Email configuration test completed',
+      emailConfig,
+      testResult: result
+    });
+    
+  } catch (error) {
+    console.error('❌ Email configuration test error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Email configuration test failed',
+      details: error.message
+    });
+  }
+});
+
 // @route   POST /api/auth/login
 // @desc    Authenticate user & get token
 // @access  Public
