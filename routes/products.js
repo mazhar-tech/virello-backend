@@ -17,18 +17,18 @@ try {
 }
 
 // Configure multer for file uploads
-// Use cloud storage in production, local storage in development
+// TEMPORARY: Force local storage until Cloudinary is fixed
 const isProduction = process.env.NODE_ENV === 'production';
-const useCloudStorage = isProduction && cloudinaryUtils;
+const useCloudStorage = false; // Temporarily disabled
 
 let storage, upload;
 
-if (useCloudStorage) {
+if (useCloudStorage && cloudinaryUtils) {
   // Use Cloudinary for production
   storage = cloudinaryUtils.storage;
   upload = cloudinaryUtils.upload;
 } else {
-  // Use local storage for development
+  // Use local storage (temporary solution)
   storage = multer.diskStorage({
     destination: function (req, file, cb) {
       const uploadDir = path.join(__dirname, '../public/uploads');
@@ -750,12 +750,14 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
       
       console.log('🔧 Products: Using cloud storage:', imageUrl);
     } else {
-      // Local storage (development)
-      imageUrl = `/uploads/${req.file.filename}`;
+      // Local storage (temporary solution for Railway)
+      // Use Railway domain for image URLs
+      const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://virello-backend-production.up.railway.app';
+      imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
       filename = req.file.filename;
-      storageType = 'local';
+      storageType = 'local-railway';
       
-      console.log('🔧 Products: Using local storage:', imageUrl);
+      console.log('🔧 Products: Using local storage with Railway URL:', imageUrl);
     }
     
     res.status(200).json({
