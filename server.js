@@ -5,6 +5,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -85,6 +87,27 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// Test endpoint to check uploads directory
+app.get('/test-uploads', (req, res) => {
+  const uploadsDir = path.join(__dirname, 'public/uploads');
+  
+  try {
+    const files = fs.readdirSync(uploadsDir);
+    res.json({
+      message: 'Uploads directory accessible',
+      path: uploadsDir,
+      files: files,
+      fileCount: files.length
+    });
+  } catch (error) {
+    res.json({
+      message: 'Uploads directory not accessible',
+      error: error.message,
+      path: uploadsDir
+    });
+  }
 });
 
 // API routes
