@@ -36,6 +36,12 @@ const storage = new CloudinaryStorage({
   }
 });
 
+// Set Cloudinary timeout
+cloudinary.config({
+  timeout: 60000, // 60 seconds timeout
+  secure: true
+});
+
 const upload = multer({ 
   storage: storage,
   limits: {

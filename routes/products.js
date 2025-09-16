@@ -678,6 +678,43 @@ router.get('/search/suggestions', [
   }
 });
 
+// @route   GET /api/products/test-cloudinary
+// @desc    Test Cloudinary connectivity
+// @access  Private (Admin only)
+router.get('/test-cloudinary', auth, adminAuth, async (req, res) => {
+  try {
+    console.log('🔧 Testing Cloudinary connectivity...');
+    
+    if (!cloudinaryUtils) {
+      return res.status(500).json({
+        error: 'Cloudinary not configured',
+        details: 'Cloudinary utilities not available'
+      });
+    }
+
+    // Test Cloudinary API
+    const testResult = await cloudinaryUtils.cloudinary.api.ping();
+    console.log('🔧 Cloudinary ping result:', testResult);
+    
+    res.json({
+      message: 'Cloudinary test successful',
+      result: testResult,
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        isProduction: isProduction,
+        useCloudStorage: useCloudStorage,
+        cloudinaryConfigured: !!cloudinaryUtils
+      }
+    });
+  } catch (error) {
+    console.error('❌ Cloudinary test failed:', error);
+    res.status(500).json({
+      error: 'Cloudinary test failed',
+      details: error.message
+    });
+  }
+});
+
 // @route   POST /api/products/upload-image
 // @desc    Upload product image (cloud storage in production, local in development)
 // @access  Private (Admin only)
