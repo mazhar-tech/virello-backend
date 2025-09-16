@@ -17,14 +17,14 @@ try {
 }
 
 // Configure multer for file uploads
-// TEMPORARY: Force local storage until Cloudinary is fixed
 const isProduction = process.env.NODE_ENV === 'production';
-const useCloudStorage = false; // Temporarily disabled
+const useCloudStorage = isProduction && cloudinaryUtils; // Use Cloudinary in production if configured
 
 let storage, upload;
 
 if (useCloudStorage && cloudinaryUtils) {
   // Use Cloudinary for production
+  console.log('🔧 Using Cloudinary for image storage');
   storage = cloudinaryUtils.storage;
   upload = cloudinaryUtils.upload;
 } else {
