@@ -18,7 +18,7 @@ try {
 
 // Configure multer for file uploads
 const isProduction = process.env.NODE_ENV === 'production';
-const useCloudStorage = isProduction && cloudinaryUtils; // Use Cloudinary in production if configured
+const useCloudStorage = false; // Temporarily disabled until Cloudinary is properly configured
 
 let storage, upload;
 
@@ -707,7 +707,7 @@ router.get('/optimized-image/:filename', async (req, res) => {
 });
 
 // @route   GET /api/products/test-cloudinary
-// @desc    Test Cloudinary connectivity
+// @desc    Test Cloudinary connectivity and configuration
 // @access  Private (Admin only)
 router.get('/test-cloudinary', auth, adminAuth, async (req, res) => {
   try {
@@ -753,6 +753,8 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
     console.log('  isProduction:', isProduction);
     console.log('  useCloudStorage:', useCloudStorage);
     console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
+    console.log('  CLOUDINARY_URL exists:', !!process.env.CLOUDINARY_URL);
+    console.log('  CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
 
     if (!req.file) {
       return res.status(400).json({
@@ -772,11 +774,26 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
 
     if (useCloudStorage) {
       // Cloud storage (production)
-      imageUrl = req.file.path; // Cloudinary provides the full URL
-      filename = req.file.filename; // Cloudinary public_id
-      storageType = 'cloudinary';
-      
-      console.log('🔧 Products: Using cloud storage:', imageUrl);
+      try {
+        imageUrl = req.file.path; // Cloudinary provides the full URL
+        filename = req.file.filename; // Cloudinary public_id
+        storageType = 'cloudinary';
+        
+        console.log('🔧 Products: Using cloud storage:', imageUrl);
+        console.log('🔧 Cloudinary upload successful:', {
+          public_id: req.file.filename,
+          secure_url: req.file.path,
+          format: req.file.format,
+          width: req.file.width,
+          height: req.file.height
+        });
+      } catch (cloudinaryError) {
+        console.error('❌ Cloudinary upload error:', cloudinaryError);
+        return res.status(500).json({
+          error: 'Cloudinary upload failed',
+          details: cloudinaryError.message
+        });
+      }
     } else {
       // Local storage (temporary solution for Railway)
       // Use Railway domain for image URLs
