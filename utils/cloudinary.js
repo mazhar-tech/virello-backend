@@ -4,9 +4,18 @@ const multer = require('multer');
 
 // Configure Cloudinary
 // Support both individual env vars and CLOUDINARY_URL format
+console.log('🔧 Cloudinary Config - Environment check:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  CLOUDINARY_URL exists:', !!process.env.CLOUDINARY_URL);
+console.log('  CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
+console.log('  CLOUDINARY_API_KEY exists:', !!process.env.CLOUDINARY_API_KEY);
+console.log('  CLOUDINARY_API_SECRET exists:', !!process.env.CLOUDINARY_API_SECRET);
+
 if (process.env.CLOUDINARY_URL) {
+  console.log('🔧 Using CLOUDINARY_URL format');
   cloudinary.config();
 } else {
+  console.log('🔧 Using individual environment variables');
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,

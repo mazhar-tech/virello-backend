@@ -683,12 +683,25 @@ router.get('/search/suggestions', [
 // @access  Private (Admin only)
 router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req, res) => {
   try {
+    console.log('🔧 Upload endpoint - Environment check:');
+    console.log('  NODE_ENV:', process.env.NODE_ENV);
+    console.log('  isProduction:', isProduction);
+    console.log('  useCloudStorage:', useCloudStorage);
+    console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
+
     if (!req.file) {
       return res.status(400).json({
         error: 'No file uploaded',
         details: 'Please select an image file'
       });
     }
+
+    console.log('🔧 Upload file received:', {
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
 
     let imageUrl, filename, storageType;
 
@@ -716,6 +729,11 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
     });
   } catch (error) {
     console.error('❌ Image upload error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     
     // Clean up local file if it exists
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {
