@@ -48,7 +48,7 @@ if (useCloudStorage && cloudinaryUtils) {
   upload = multer({ 
     storage: storage,
     limits: {
-      fileSize: 5 * 1024 * 1024 // 5MB limit
+      fileSize: 2 * 1024 * 1024 // Reduced to 2MB limit for better performance
     },
     fileFilter: function (req, file, cb) {
       // Check file type
@@ -678,6 +678,34 @@ router.get('/search/suggestions', [
   }
 });
 
+// @route   GET /api/products/optimized-image/:filename
+// @desc    Serve optimized product image
+// @access  Public
+router.get('/optimized-image/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const imagePath = path.join(__dirname, '../public/uploads', filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(imagePath)) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    // Set cache headers for better performance
+    res.set({
+      'Cache-Control': 'public, max-age=31536000', // 1 year cache
+      'ETag': `"${filename}"`,
+      'Content-Type': 'image/jpeg'
+    });
+    
+    // Send the file
+    res.sendFile(imagePath);
+  } catch (error) {
+    console.error('Error serving optimized image:', error);
+    res.status(500).json({ error: 'Error serving image' });
+  }
+});
+
 // @route   GET /api/products/test-cloudinary
 // @desc    Test Cloudinary connectivity
 // @access  Private (Admin only)
@@ -752,12 +780,12 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
     } else {
       // Local storage (temporary solution for Railway)
       // Use Railway domain for image URLs
-      // Ensure we always use the full Railway URL with https://
+      // Use optimized image endpoint for better performance
       const baseUrl = 'https://virello-backend-production.up.railway.app';
       console.log('🔧 Base URL being used:', baseUrl);
       console.log('🔧 Filename:', req.file.filename);
-      imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
-      console.log('🔧 Final image URL:', imageUrl);
+      imageUrl = `${baseUrl}/api/products/optimized-image/${req.file.filename}`;
+      console.log('🔧 Final optimized image URL:', imageUrl);
       filename = req.file.filename;
       storageType = 'local-railway';
       
