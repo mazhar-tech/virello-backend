@@ -1,10 +1,10 @@
-# Product Images Fix - Railway Deployment Guide
+# Product Images Fix - Render Deployment Guide
 
 ## Problem Identified
 Product images are not showing on live production because:
-1. **Railway Serverless Environment**: Files uploaded to `public/uploads` are temporary and lost when containers restart
+1. **Render Serverless Environment**: Files uploaded to `public/uploads` are temporary and lost when containers restart
 2. **No Cloud Storage**: Production needs persistent cloud storage for uploaded images
-3. **Static File Serving Issues**: Railway doesn't persist local file uploads
+3. **Static File Serving Issues**: Render doesn't persist local file uploads
 
 ## Solutions Implemented
 
@@ -22,10 +22,10 @@ npm install cloudinary@^1.41.0 multer-storage-cloudinary@^4.0.0
 
 **Note**: We use Cloudinary v1.x for compatibility with `multer-storage-cloudinary`.
 
-### Step 2: Set Up Cloudinary (Required for Railway)
+### Step 2: Set Up Cloudinary (Required for Render)
 1. Create a free account at [cloudinary.com](https://cloudinary.com)
 2. Get your credentials from the dashboard
-3. Add environment variable to Railway using **one** of these methods:
+3. Add environment variable to Render using **one** of these methods:
 
    **Method A: Individual Variables**
    ```
@@ -39,9 +39,9 @@ npm install cloudinary@^1.41.0 multer-storage-cloudinary@^4.0.0
    CLOUDINARY_URL=cloudinary://827239834473881:nPR-WR2Q2BihbYtMqcQioyQHbj8@ddpts6gfp
    ```
 
-### Step 3: Deploy to Railway
+### Step 3: Deploy to Render
 ```bash
-railway up
+Render up
 ```
 
 ## How It Works
@@ -51,7 +51,7 @@ railway up
 - Images served via Express static middleware
 - Files persist between restarts
 
-### Production Environment (Railway)
+### Production Environment (Render)
 - Uses Cloudinary cloud storage
 - Images uploaded directly to cloud
 - URLs point to Cloudinary CDN
@@ -61,7 +61,7 @@ railway up
 
 ### Test Image Upload
 ```bash
-curl -X POST https://your-railway-domain.railway.app/api/products/upload-image \
+curl -X POST https://virello-backend.onrender.com/api/products/upload-image \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F "image=@test-image.jpg"
 ```
@@ -92,7 +92,7 @@ If you have existing products with local image URLs, you'll need to:
 
 ## Monitoring
 
-Check Railway logs for:
+Check Render logs for:
 - Image upload success/failure
 - Storage type being used
 - Any Cloudinary API errors
@@ -107,7 +107,7 @@ If Cloudinary is not configured:
 ## Cost Considerations
 
 - **Cloudinary Free Tier**: 25GB storage, 25GB bandwidth/month
-- **Railway**: No additional cost for cloud storage integration
+- **Render**: No additional cost for cloud storage integration
 - **Alternative**: AWS S3 + CloudFront (more complex setup)
 
 ## Next Steps

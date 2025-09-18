@@ -6,7 +6,7 @@ Users are not receiving OTP emails when creating accounts on the live production
 ## Common Causes & Solutions
 
 ### 1. Missing Environment Variables
-Railway needs these environment variables set:
+Render needs these environment variables set:
 
 ```bash
 # Required Email Configuration
@@ -34,9 +34,9 @@ FRONTEND_URL=https://virellofoods.com
 - **Problem**: Gmail blocking "less secure apps"
 - **Solution**: Enable 2-Factor Authentication and use App Password
 
-### 4. Railway Environment Variables
-Check if variables are properly set in Railway dashboard:
-1. Go to Railway project dashboard
+### 4. Render Environment Variables
+Check if variables are properly set in Render dashboard:
+1. Go to Render project dashboard
 2. Click on your service
 3. Go to Variables tab
 4. Verify all email variables are set
@@ -48,11 +48,11 @@ Check if variables are properly set in Railway dashboard:
 ## Testing Steps
 
 ### Step 1: Test Email Configuration
-Visit: `https://virello-backend-production.up.railway.app/api/auth/test-email-config`
+Visit: `https://virello-backend.onrender.com/api/auth/test-email-config`
 (Requires admin authentication)
 
 ### Step 2: Check Server Logs
-Look for these log messages in Railway:
+Look for these log messages in Render:
 - `📧 Environment check:`
 - `📧 Email OTP result:`
 - `❌ Email OTP error:`
@@ -65,7 +65,7 @@ Look for these log messages in Railway:
 ## Quick Fixes
 
 ### Fix 1: Set Missing Variables
-If variables are missing, add them to Railway:
+If variables are missing, add them to Render:
 ```bash
 EMAIL_SERVICE=gmail
 EMAIL_USER=your-email@gmail.com
@@ -92,7 +92,7 @@ SENDGRID_API_KEY=your-sendgrid-key
 ## Monitoring
 
 ### Check Email Delivery
-1. Monitor Railway logs for email sending attempts
+1. Monitor Render logs for email sending attempts
 2. Check Gmail sent folder (if using Gmail)
 3. Monitor bounce rates and delivery failures
 
@@ -103,7 +103,7 @@ SENDGRID_API_KEY=your-sendgrid-key
 
 ## Next Steps
 
-1. **Immediate**: Check Railway environment variables
+1. **Immediate**: Check Render environment variables
 2. **Short-term**: Test email configuration endpoint
 3. **Long-term**: Consider upgrading to professional email service
 
@@ -115,7 +115,7 @@ GET /api/auth/test-email-config
 ```
 
 ### Check Environment Variables
-Look for these in Railway logs:
+Look for these in Render logs:
 - EMAIL_SERVICE
 - EMAIL_USER
 - EMAIL_PASSWORD

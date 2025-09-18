@@ -795,18 +795,21 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
         });
       }
     } else {
-      // Local storage (temporary solution for Railway)
-      // Use Railway domain for image URLs
+      // Local storage (temporary solution for Render.com)
+      // Use Render.com domain for image URLs
       // Use optimized image endpoint for better performance
-      const baseUrl = 'https://virello-backend-production.up.railway.app';
+      const baseUrl = 'https://virello-backend.onrender.com';
       console.log('🔧 Base URL being used:', baseUrl);
       console.log('🔧 Filename:', req.file.filename);
       imageUrl = `${baseUrl}/api/products/optimized-image/${req.file.filename}`;
       console.log('🔧 Final optimized image URL:', imageUrl);
       filename = req.file.filename;
-      storageType = 'local-railway';
+      storageType = 'local-render.com';
       
-      console.log('🔧 Products: Using local storage with Railway URL:', imageUrl);
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
     }
     
     res.status(200).json({

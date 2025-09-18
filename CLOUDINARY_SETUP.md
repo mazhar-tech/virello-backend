@@ -5,7 +5,7 @@ Cloudinary provides cloud-based image storage, optimization, and delivery. This 
 
 ## Required Environment Variables
 
-Add these variables to your Railway project:
+Add these variables to your Render project:
 
 ### Option 1: Using CLOUDINARY_URL (Recommended)
 ```bash
