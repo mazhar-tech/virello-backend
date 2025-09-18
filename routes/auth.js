@@ -638,12 +638,44 @@ router.put('/profile', [
     .optional()
     .trim()
     .isLength({ min: 10, max: 20 })
-    .withMessage('Phone number must be between 10 and 20 characters')
+    .withMessage('Phone number must be between 10 and 20 characters'),
+  body('address')
+    .optional()
+    .trim()
+    .isLength({ min: 5, max: 200 })
+    .withMessage('Address must be between 5 and 200 characters'),
+  body('city')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('City must be between 2 and 100 characters'),
+  body('state')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('State must be between 2 and 100 characters'),
+  body('zipCode')
+    .optional()
+    .trim()
+    .isLength({ min: 3, max: 20 })
+    .withMessage('Zip code must be between 3 and 20 characters'),
+  body('country')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Country must be between 2 and 100 characters')
 ], async (req, res) => {
   try {
+    console.log('Profile update request received:', {
+      userId: req.user?.userId,
+      body: req.body,
+      timestamp: new Date().toISOString()
+    });
+    
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
       return res.status(400).json({
         error: 'Validation Error',
         details: errors.array()
@@ -664,27 +696,49 @@ router.put('/profile', [
 
     const updateData = {};
     
-    if (displayName) updateData.displayName = displayName;
+    // Only update displayName if it's provided and not empty
+    // Note: displayName is required in the User model, so we need to be careful
+    if (displayName && displayName.trim() && displayName.trim().length >= 2) {
+      updateData.displayName = displayName.trim();
+    }
+    
+    // Build profile object if any profile fields are provided
     if (firstName || lastName || phone || address || city || state || zipCode || country) {
       updateData.profile = {};
-      if (firstName) updateData.profile.firstName = firstName;
-      if (lastName) updateData.profile.lastName = lastName;
-      if (phone) updateData.profile.phone = phone;
+      
+      if (firstName && firstName.trim()) updateData.profile.firstName = firstName.trim();
+      if (lastName && lastName.trim()) updateData.profile.lastName = lastName.trim();
+      if (phone && phone.trim()) updateData.profile.phone = phone.trim();
+      
+      // Build address object if any address fields are provided
       if (address || city || state || zipCode || country) {
         updateData.profile.address = {};
-        if (address) updateData.profile.address.street = address;
-        if (city) updateData.profile.address.city = city;
-        if (state) updateData.profile.address.state = state;
-        if (zipCode) updateData.profile.address.zipCode = zipCode;
-        if (country) updateData.profile.address.country = country;
+        if (address && address.trim()) updateData.profile.address.street = address.trim();
+        if (city && city.trim()) updateData.profile.address.city = city.trim();
+        if (state && state.trim()) updateData.profile.address.state = state.trim();
+        if (zipCode && zipCode.trim()) updateData.profile.address.zipCode = zipCode.trim();
+        if (country && country.trim()) updateData.profile.address.country = country.trim();
       }
     }
+    
+    // If no update data, return early
+    if (Object.keys(updateData).length === 0) {
+      console.log('No update data provided');
+      return res.status(400).json({
+        error: 'No Data',
+        details: 'No valid fields provided for update'
+      });
+    }
+
+    console.log('Update data prepared:', updateData);
 
     const user = await User.findByIdAndUpdate(
       req.user.userId,
       updateData,
       { new: true, runValidators: true }
     ).select('-password');
+
+    console.log('User update result:', user ? 'Success' : 'User not found');
 
     if (!user) {
       return res.status(404).json({
@@ -710,9 +764,27 @@ router.put('/profile', [
 
   } catch (error) {
     console.error('Update profile error:', error);
+    
+    // Handle specific MongoDB validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        error: 'Validation Error',
+        details: Object.values(error.errors).map(err => err.message)
+      });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({
+        error: 'Duplicate Error',
+        details: 'A user with this information already exists'
+      });
+    }
+    
     res.status(500).json({
       error: 'Server Error',
-      details: 'Failed to update profile'
+      details: 'Failed to update profile',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 });
@@ -1181,3 +1253,4 @@ router.post('/logout', auth, (req, res) => {
 });
 
 module.exports = router;
+
