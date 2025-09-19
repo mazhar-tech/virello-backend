@@ -14,7 +14,9 @@
     "seed-admin": "node seed-admin.js",
     "clean": "rm -f .pid .lock server.pid app.lock",
     "cleanup": "node cleanup.js",
-    "restart": "npm run clean && npm start"
+    "restart": "npm run clean && npm start",
+    "keep-alive": "node keep-alive.js",
+    "keep-alive-start": "BACKEND_URL=https://virello-backend.onrender.com node keep-alive.js"
   },
   "dependencies": {
     "axios": "^1.11.0",
