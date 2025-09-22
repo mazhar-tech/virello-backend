@@ -42,14 +42,52 @@ app.use(helmet({
 app.use(compression());
 
 // CORS configuration - Must be before rate limiting
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'https://virellofoods.com',
+      'https://www.virellofoods.com',
+      'https://virello-backend.onrender.com'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('🚫 CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
   optionsSuccessStatus: 200
-}));
+};
+
+app.use(cors(corsOptions));
+
+// CORS error handler
+app.use((err, req, res, next) => {
+  if (err.message === 'Not allowed by CORS') {
+    console.log('🚫 CORS Error:', {
+      origin: req.headers.origin,
+      method: req.method,
+      url: req.url,
+      userAgent: req.headers['user-agent']
+    });
+    return res.status(403).json({
+      error: 'CORS Error',
+      message: 'Origin not allowed',
+      origin: req.headers.origin
+    });
+  }
+  next(err);
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -87,6 +125,22 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// CORS test endpoint
+app.get('/cors-test', (req, res) => {
+  res.status(200).json({
+    message: 'CORS test successful',
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString(),
+    allowedOrigins: [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'https://virellofoods.com',
+      'https://www.virellofoods.com',
+      'https://virello-backend.onrender.com'
+    ]
   });
 });
 
