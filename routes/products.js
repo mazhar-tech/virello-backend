@@ -22,13 +22,28 @@ const useCloudStorage = true; // Enable Cloudinary for production
 
 let storage, upload;
 
-if (useCloudStorage && cloudinaryUtils) {
+// Check if Cloudinary is properly configured
+const isCloudinaryConfigured = cloudinaryUtils && 
+  process.env.CLOUDINARY_CLOUD_NAME && 
+  process.env.CLOUDINARY_API_KEY && 
+  process.env.CLOUDINARY_API_SECRET;
+
+console.log('🔧 Storage configuration check:');
+console.log('  useCloudStorage:', useCloudStorage);
+console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
+console.log('  isCloudinaryConfigured:', isCloudinaryConfigured);
+console.log('  CLOUDINARY_CLOUD_NAME:', !!process.env.CLOUDINARY_CLOUD_NAME);
+console.log('  CLOUDINARY_API_KEY:', !!process.env.CLOUDINARY_API_KEY);
+console.log('  CLOUDINARY_API_SECRET:', !!process.env.CLOUDINARY_API_SECRET);
+
+if (useCloudStorage && isCloudinaryConfigured) {
   // Use Cloudinary for production
   console.log('🔧 Using Cloudinary for image storage');
   storage = cloudinaryUtils.storage;
   upload = cloudinaryUtils.upload;
 } else {
-  // Use local storage (temporary solution)
+  // Use local storage (fallback when Cloudinary is not available)
+  console.log('🔧 Using local storage as fallback');
   storage = multer.diskStorage({
     destination: function (req, file, cb) {
       const uploadDir = path.join(__dirname, '../public/uploads');
@@ -555,7 +570,7 @@ router.delete('/:id', auth, adminAuth, async (req, res) => {
     }
 
     // Delete image from Cloudinary if it exists
-    if (product.imageUrl && cloudinaryUtils) {
+    if (product.imageUrl && isCloudinaryConfigured) {
       try {
         // Extract public_id from Cloudinary URL
         const urlParts = product.imageUrl.split('/');
@@ -751,7 +766,10 @@ router.get('/test-cloudinary', auth, adminAuth, async (req, res) => {
         NODE_ENV: process.env.NODE_ENV,
         isProduction: isProduction,
         useCloudStorage: useCloudStorage,
-        cloudinaryConfigured: !!cloudinaryUtils
+        cloudinaryConfigured: isCloudinaryConfigured,
+        cloudinaryUtilsAvailable: !!cloudinaryUtils,
+        storageConfigured: !!storage,
+        uploadConfigured: !!upload
       }
     });
   } catch (error) {
@@ -773,13 +791,25 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
     console.log('  isProduction:', isProduction);
     console.log('  useCloudStorage:', useCloudStorage);
     console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
+    console.log('  isCloudinaryConfigured:', isCloudinaryConfigured);
     console.log('  CLOUDINARY_URL exists:', !!process.env.CLOUDINARY_URL);
     console.log('  CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
+    console.log('  CLOUDINARY_API_KEY exists:', !!process.env.CLOUDINARY_API_KEY);
+    console.log('  CLOUDINARY_API_SECRET exists:', !!process.env.CLOUDINARY_API_SECRET);
 
     if (!req.file) {
       return res.status(400).json({
         error: 'No file uploaded',
         details: 'Please select an image file'
+      });
+    }
+
+    // Check if we have proper storage configuration
+    if (!storage || !upload) {
+      console.error('❌ Storage configuration error: storage or upload not properly configured');
+      return res.status(500).json({
+        error: 'Storage configuration error',
+        details: 'Image storage is not properly configured. Please contact administrator.'
       });
     }
 
@@ -792,7 +822,7 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
 
     let imageUrl, filename, storageType;
 
-    if (useCloudStorage && cloudinaryUtils) {
+    if (useCloudStorage && isCloudinaryConfigured) {
       // Cloud storage (production) - Cloudinary
       try {
         imageUrl = req.file.path; // Cloudinary provides the full URL
@@ -842,7 +872,7 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
     };
 
     // Add optimized URL for Cloudinary
-    if (storageType === 'cloudinary' && cloudinaryUtils) {
+    if (storageType === 'cloudinary' && isCloudinaryConfigured) {
       responseData.optimizedImageUrl = cloudinaryUtils.getOptimizedImageUrl(filename, {
         width: 400,
         height: 300,
