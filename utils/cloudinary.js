@@ -23,14 +23,18 @@ if (process.env.CLOUDINARY_URL) {
   });
 }
 
-// Test Cloudinary connection
-cloudinary.api.ping()
-  .then(result => {
+// Test Cloudinary connection (non-blocking)
+// This will be tested when actually needed, not during module initialization
+const testCloudinaryConnection = async () => {
+  try {
+    const result = await cloudinary.api.ping();
     console.log('✅ Cloudinary connection test successful:', result);
-  })
-  .catch(error => {
+    return true;
+  } catch (error) {
     console.error('❌ Cloudinary connection test failed:', error);
-  });
+    return false;
+  }
+};
 
 // Configure multer for Cloudinary
 const storage = new CloudinaryStorage({
@@ -153,5 +157,6 @@ module.exports = {
   upload,
   deleteImage,
   getOptimizedImageUrl,
-  handleMulterError
+  handleMulterError,
+  testCloudinaryConnection
 };

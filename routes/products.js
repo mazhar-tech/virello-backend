@@ -758,7 +758,7 @@ router.get('/test-cloudinary', auth, adminAuth, async (req, res) => {
     }
 
     // Test Cloudinary API
-    const testResult = await cloudinaryUtils.cloudinary.api.ping();
+    const testResult = await cloudinaryUtils.testCloudinaryConnection();
     console.log('🔧 Cloudinary ping result:', testResult);
     
     res.json({
