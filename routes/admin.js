@@ -4,6 +4,7 @@ const { auth, adminAuth } = require("../middleware/auth");
 const User = require("../models/User");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
+const Settings = require("../models/Settings");
 const router = express.Router();
 
 // @route   GET /api/admin/dashboard
@@ -210,5 +211,138 @@ router.patch(
     }
   }
 );
+
+// @route   GET /api/admin/settings
+// @desc    Get admin settings
+// @access  Private (Admin only)
+router.get("/settings", auth, adminAuth, async (req, res) => {
+  try {
+    let settings = await Settings.findOne();
+    
+    // If no settings exist, create default settings
+    if (!settings) {
+      settings = new Settings({
+        lastUpdatedBy: req.user.userId
+      });
+      await settings.save();
+    }
+
+    res.json({
+      success: true,
+      data: settings
+    });
+  } catch (error) {
+    console.error("Get settings error:", error);
+    res.status(500).json({
+      error: "Server Error",
+      details: "Failed to fetch settings",
+    });
+  }
+});
+
+// @route   PUT /api/admin/settings
+// @desc    Update admin settings
+// @access  Private (Admin only)
+router.put("/settings", [
+  auth,
+  adminAuth,
+  body("minimumOrderAmount")
+    .isNumeric()
+    .withMessage("Minimum order amount must be a number"),
+  body("shippingCharge")
+    .isNumeric()
+    .withMessage("Shipping charge must be a number"),
+  body("freeShippingCurrency")
+    .isString()
+    .withMessage("Free shipping currency must be a string"),
+  body("freeShippingEnabled")
+    .isBoolean()
+    .withMessage("Free shipping enabled must be a boolean"),
+  body("discountSettings.enabled")
+    .isBoolean()
+    .withMessage("Discount enabled must be a boolean"),
+  body("discountSettings.defaultDiscountPercentage")
+    .isNumeric()
+    .withMessage("Default discount percentage must be a number"),
+  body("discountSettings.minimumDiscountAmount")
+    .isNumeric()
+    .withMessage("Minimum discount amount must be a number"),
+  body("discountSettings.maximumDiscountAmount")
+    .isNumeric()
+    .withMessage("Maximum discount amount must be a number"),
+  body("discountSettings.discountCurrency")
+    .isString()
+    .withMessage("Discount currency must be a string"),
+  body("discountSettings.showOriginalPrice")
+    .isBoolean()
+    .withMessage("Show original price must be a boolean"),
+  body("discountSettings.showDiscountBadge")
+    .isBoolean()
+    .withMessage("Show discount badge must be a boolean"),
+  body("discountSettings.discountBadgeText")
+    .isString()
+    .withMessage("Discount badge text must be a string"),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: "Validation Error",
+        details: errors.array(),
+      });
+    }
+
+    const {
+      minimumOrderAmount,
+      shippingCharge,
+      freeShippingCurrency,
+      freeShippingEnabled,
+      discountSettings,
+      shippingZones
+    } = req.body;
+
+    // Find existing settings or create new one
+    let settings = await Settings.findOne();
+    
+    if (settings) {
+      // Update existing settings
+      settings.minimumOrderAmount = minimumOrderAmount;
+      settings.shippingCharge = shippingCharge;
+      settings.freeShippingCurrency = freeShippingCurrency;
+      settings.freeShippingEnabled = freeShippingEnabled;
+      settings.discountSettings = discountSettings;
+      settings.shippingZones = shippingZones || [];
+      settings.lastUpdatedBy = req.user.userId;
+      settings.lastUpdatedAt = new Date();
+      
+      await settings.save();
+    } else {
+      // Create new settings
+      settings = new Settings({
+        minimumOrderAmount,
+        shippingCharge,
+        freeShippingCurrency,
+        freeShippingEnabled,
+        discountSettings,
+        shippingZones: shippingZones || [],
+        lastUpdatedBy: req.user.userId
+      });
+      
+      await settings.save();
+    }
+
+    res.json({
+      success: true,
+      message: "Settings updated successfully",
+      data: settings
+    });
+  } catch (error) {
+    console.error("Update settings error:", error);
+    res.status(500).json({
+      error: "Server Error",
+      details: "Failed to update settings",
+    });
+  }
+});
 
 module.exports = router;

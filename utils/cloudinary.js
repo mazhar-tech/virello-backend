@@ -59,7 +59,11 @@ cloudinary.config({
 const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 2 * 1024 * 1024, // Reduced to 2MB limit for production stability
+    fieldSize: 10 * 1024 * 1024, // 10MB for form fields
+    files: 1, // Only one file at a time
+    fields: 10, // Maximum number of non-file fields
+    parts: 20 // Maximum number of parts (fields + files)
   },
   fileFilter: function (req, file, cb) {
     // Check file type
@@ -73,11 +77,13 @@ const upload = multer({
 
 // Add error handling middleware for multer
 const handleMulterError = (error, req, res, next) => {
+  console.error('🔧 Multer error:', error);
+  
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         error: 'File too large',
-        details: 'Image file must be less than 5MB'
+        details: 'Image file must be less than 2MB'
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
@@ -90,6 +96,18 @@ const handleMulterError = (error, req, res, next) => {
       return res.status(400).json({
         error: 'Unexpected file field',
         details: 'Please use the correct field name for the image'
+      });
+    }
+    if (error.code === 'LIMIT_FIELD_COUNT') {
+      return res.status(400).json({
+        error: 'Too many fields',
+        details: 'Request has too many form fields'
+      });
+    }
+    if (error.code === 'LIMIT_PART_COUNT') {
+      return res.status(400).json({
+        error: 'Too many parts',
+        details: 'Request has too many parts'
       });
     }
   }

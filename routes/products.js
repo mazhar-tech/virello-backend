@@ -786,24 +786,32 @@ router.get('/test-cloudinary', auth, adminAuth, async (req, res) => {
 // @route   POST /api/products/upload-image
 // @desc    Upload product image (cloud storage in production, local in development)
 // @access  Private (Admin only)
-router.post('/upload-image', auth, adminAuth, upload.single('image'), cloudinaryUtils.handleMulterError, async (req, res) => {
+router.post('/upload-image', (req, res, next) => {
+  console.log('🔧 Upload endpoint - Pre-auth middleware');
+  console.log('  Request headers:', req.headers);
+  console.log('  Authorization header:', req.headers.authorization);
+  next();
+}, auth, adminAuth, upload.single('image'), cloudinaryUtils.handleMulterError, async (req, res) => {
   // Set longer timeout for file uploads
   req.setTimeout(120000); // 2 minutes
+  res.setTimeout(120000); // 2 minutes
+  
+  console.log('🔧 Upload endpoint called at:', new Date().toISOString());
+  console.log('🔧 Upload endpoint - Environment check:');
+  console.log('  NODE_ENV:', process.env.NODE_ENV);
+  console.log('  isProduction:', isProduction);
+  console.log('  useCloudStorage:', useCloudStorage);
+  console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
+  console.log('  isCloudinaryConfigured:', isCloudinaryConfigured);
+  console.log('  CLOUDINARY_URL exists:', !!process.env.CLOUDINARY_URL);
+  console.log('  CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
+  console.log('  CLOUDINARY_API_KEY exists:', !!process.env.CLOUDINARY_API_KEY);
+  console.log('  CLOUDINARY_API_SECRET exists:', !!process.env.CLOUDINARY_API_SECRET);
+  console.log('  Request headers:', req.headers);
+  console.log('  Request body keys:', Object.keys(req.body || {}));
+  console.log('  File received:', !!req.file);
   
   try {
-    console.log('🔧 Upload endpoint - Environment check:');
-    console.log('  NODE_ENV:', process.env.NODE_ENV);
-    console.log('  isProduction:', isProduction);
-    console.log('  useCloudStorage:', useCloudStorage);
-    console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
-    console.log('  isCloudinaryConfigured:', isCloudinaryConfigured);
-    console.log('  CLOUDINARY_URL exists:', !!process.env.CLOUDINARY_URL);
-    console.log('  CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
-    console.log('  CLOUDINARY_API_KEY exists:', !!process.env.CLOUDINARY_API_KEY);
-    console.log('  CLOUDINARY_API_SECRET exists:', !!process.env.CLOUDINARY_API_SECRET);
-    console.log('  Request headers:', req.headers);
-    console.log('  Request body keys:', Object.keys(req.body || {}));
-    console.log('  File received:', !!req.file);
 
     if (!req.file) {
       return res.status(400).json({
@@ -911,8 +919,115 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), cloudinary
       fs.unlinkSync(req.file.path);
     }
     
+    // Return proper error response
     res.status(500).json({
       error: 'Upload failed',
+      details: error.message || 'An unexpected error occurred during upload'
+    });
+  }
+});
+
+// Global error handler for upload route
+router.use('/upload-image', (error, req, res, next) => {
+  console.error('❌ Global upload error handler:', error);
+  
+  // Clean up any files
+  if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (cleanupError) {
+      console.error('❌ Error cleaning up file:', cleanupError);
+    }
+  }
+  
+  res.status(500).json({
+    error: 'Upload service unavailable',
+    details: 'The upload service is temporarily unavailable. Please try again later.'
+  });
+});
+
+// Health check for upload service (no auth required)
+router.get('/upload-health', (req, res) => {
+  try {
+    const healthStatus = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      cloudinary: {
+        configured: isCloudinaryConfigured,
+        cloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: !!process.env.CLOUDINARY_API_KEY,
+        apiSecret: !!process.env.CLOUDINARY_API_SECRET
+      },
+      storage: {
+        type: useCloudStorage && isCloudinaryConfigured ? 'cloudinary' : 'local',
+        multerConfigured: !!upload
+      },
+      limits: {
+        maxFileSize: '2MB',
+        maxFiles: 1,
+        allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      }
+    };
+    
+    res.status(200).json(healthStatus);
+  } catch (error) {
+    res.status(500).json({
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Test upload endpoint (no auth required for testing)
+router.post('/test-upload', upload.single('image'), cloudinaryUtils.handleMulterError, async (req, res) => {
+  console.log('🔧 Test upload endpoint called');
+  
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No file uploaded',
+        details: 'Please select an image file'
+      });
+    }
+
+    console.log('🔧 Test upload - File received:', {
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+
+    let imageUrl, filename, storageType;
+
+    if (useCloudStorage && isCloudinaryConfigured) {
+      // Cloud storage (production) - Cloudinary
+      imageUrl = req.file.path; // Cloudinary provides the full URL
+      filename = req.file.filename; // Cloudinary public_id
+      storageType = 'cloudinary';
+      
+      console.log('🔧 Test upload - Using Cloudinary storage:', imageUrl);
+    } else {
+      // Local storage fallback
+      const baseUrl = 'https://virello-backend.onrender.com';
+      imageUrl = `${baseUrl}/api/products/optimized-image/${req.file.filename}`;
+      filename = req.file.filename;
+      storageType = 'local-render.com';
+      
+      console.log('🔧 Test upload - Using local storage:', imageUrl);
+    }
+    
+    res.status(200).json({
+      message: 'Test upload successful',
+      imageUrl: imageUrl,
+      filename: filename,
+      storage: storageType,
+      fileSize: req.file.size
+    });
+  } catch (error) {
+    console.error('❌ Test upload error:', error);
+    res.status(500).json({
+      error: 'Test upload failed',
       details: error.message
     });
   }
