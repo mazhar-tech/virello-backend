@@ -23,6 +23,15 @@ if (process.env.CLOUDINARY_URL) {
   });
 }
 
+// Test Cloudinary connection
+cloudinary.api.ping()
+  .then(result => {
+    console.log('✅ Cloudinary connection test successful:', result);
+  })
+  .catch(error => {
+    console.error('❌ Cloudinary connection test failed:', error);
+  });
+
 // Configure multer for Cloudinary
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
@@ -62,6 +71,39 @@ const upload = multer({
   }
 });
 
+// Add error handling middleware for multer
+const handleMulterError = (error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        error: 'File too large',
+        details: 'Image file must be less than 5MB'
+      });
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        error: 'Too many files',
+        details: 'Only one image file is allowed'
+      });
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        error: 'Unexpected file field',
+        details: 'Please use the correct field name for the image'
+      });
+    }
+  }
+  
+  if (error.message === 'Only image files are allowed') {
+    return res.status(400).json({
+      error: 'Invalid file type',
+      details: 'Only image files (jpg, jpeg, png, gif, webp) are allowed'
+    });
+  }
+  
+  next(error);
+};
+
 // Helper function to delete image from Cloudinary
 const deleteImage = async (publicId) => {
   try {
@@ -89,7 +131,9 @@ const getOptimizedImageUrl = (publicId, options = {}) => {
 
 module.exports = {
   cloudinary,
+  storage,
   upload,
   deleteImage,
-  getOptimizedImageUrl
+  getOptimizedImageUrl,
+  handleMulterError
 };

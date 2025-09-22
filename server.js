@@ -67,13 +67,25 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  optionsSuccessStatus: 200
 }));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Handle multipart/form-data for file uploads
+app.use((req, res, next) => {
+  if (req.is('multipart/form-data')) {
+    // Skip body parsing for multipart requests - let multer handle it
+    next();
+  } else {
+    next();
+  }
+});
 
 // Static file serving for images
 app.use('/images', express.static('public/images'));

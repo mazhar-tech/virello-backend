@@ -18,7 +18,7 @@ try {
 
 // Configure multer for file uploads
 const isProduction = process.env.NODE_ENV === 'production';
-const useCloudStorage = true; // Enable Cloudinary for production
+const useCloudStorage = true; // Enable Cloudinary for all environments
 
 let storage, upload;
 
@@ -29,6 +29,8 @@ const isCloudinaryConfigured = cloudinaryUtils &&
   process.env.CLOUDINARY_API_SECRET;
 
 console.log('🔧 Storage configuration check:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  isProduction:', isProduction);
 console.log('  useCloudStorage:', useCloudStorage);
 console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
 console.log('  isCloudinaryConfigured:', isCloudinaryConfigured);
@@ -784,7 +786,10 @@ router.get('/test-cloudinary', auth, adminAuth, async (req, res) => {
 // @route   POST /api/products/upload-image
 // @desc    Upload product image (cloud storage in production, local in development)
 // @access  Private (Admin only)
-router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req, res) => {
+router.post('/upload-image', auth, adminAuth, upload.single('image'), cloudinaryUtils.handleMulterError, async (req, res) => {
+  // Set longer timeout for file uploads
+  req.setTimeout(120000); // 2 minutes
+  
   try {
     console.log('🔧 Upload endpoint - Environment check:');
     console.log('  NODE_ENV:', process.env.NODE_ENV);
@@ -796,6 +801,9 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
     console.log('  CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
     console.log('  CLOUDINARY_API_KEY exists:', !!process.env.CLOUDINARY_API_KEY);
     console.log('  CLOUDINARY_API_SECRET exists:', !!process.env.CLOUDINARY_API_SECRET);
+    console.log('  Request headers:', req.headers);
+    console.log('  Request body keys:', Object.keys(req.body || {}));
+    console.log('  File received:', !!req.file);
 
     if (!req.file) {
       return res.status(400).json({
