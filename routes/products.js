@@ -18,7 +18,7 @@ try {
 
 // Configure multer for file uploads
 const isProduction = process.env.NODE_ENV === 'production';
-const useCloudStorage = false; // Temporarily disabled until Cloudinary is properly configured
+const useCloudStorage = true; // Enable Cloudinary for production
 
 let storage, upload;
 
@@ -545,7 +545,7 @@ router.put('/:id', [
 // @access  Private (Admin only)
 router.delete('/:id', auth, adminAuth, async (req, res) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    const product = await Product.findById(req.params.id);
     
     if (!product) {
       return res.status(404).json({
@@ -553,6 +553,26 @@ router.delete('/:id', auth, adminAuth, async (req, res) => {
         details: 'Product does not exist'
       });
     }
+
+    // Delete image from Cloudinary if it exists
+    if (product.imageUrl && cloudinaryUtils) {
+      try {
+        // Extract public_id from Cloudinary URL
+        const urlParts = product.imageUrl.split('/');
+        const publicId = urlParts[urlParts.length - 1].split('.')[0];
+        const folderPath = 'virello-products/' + publicId;
+        
+        console.log('🗑️ Deleting image from Cloudinary:', folderPath);
+        await cloudinaryUtils.deleteImage(folderPath);
+        console.log('✅ Image deleted from Cloudinary successfully');
+      } catch (imageDeleteError) {
+        console.error('⚠️ Failed to delete image from Cloudinary:', imageDeleteError.message);
+        // Continue with product deletion even if image deletion fails
+      }
+    }
+
+    // Delete the product from database
+    await Product.findByIdAndDelete(req.params.id);
 
     res.json({
       message: 'Product deleted successfully',
@@ -772,20 +792,21 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
 
     let imageUrl, filename, storageType;
 
-    if (useCloudStorage) {
-      // Cloud storage (production)
+    if (useCloudStorage && cloudinaryUtils) {
+      // Cloud storage (production) - Cloudinary
       try {
         imageUrl = req.file.path; // Cloudinary provides the full URL
         filename = req.file.filename; // Cloudinary public_id
         storageType = 'cloudinary';
         
-        console.log('🔧 Products: Using cloud storage:', imageUrl);
+        console.log('🔧 Products: Using Cloudinary storage:', imageUrl);
         console.log('🔧 Cloudinary upload successful:', {
           public_id: req.file.filename,
           secure_url: req.file.path,
           format: req.file.format,
           width: req.file.width,
-          height: req.file.height
+          height: req.file.height,
+          folder: 'virello-products'
         });
       } catch (cloudinaryError) {
         console.error('❌ Cloudinary upload error:', cloudinaryError);
@@ -812,12 +833,33 @@ router.post('/upload-image', auth, adminAuth, upload.single('image'), async (req
       console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
     }
     
-    res.status(200).json({
+    // Prepare response data
+    const responseData = {
       message: `Image uploaded to ${storageType} storage successfully`,
       imageUrl: imageUrl,
       filename: filename,
       storage: storageType
-    });
+    };
+
+    // Add optimized URL for Cloudinary
+    if (storageType === 'cloudinary' && cloudinaryUtils) {
+      responseData.optimizedImageUrl = cloudinaryUtils.getOptimizedImageUrl(filename, {
+        width: 400,
+        height: 300,
+        crop: 'fill',
+        quality: 'auto',
+        format: 'auto'
+      });
+      responseData.thumbnailUrl = cloudinaryUtils.getOptimizedImageUrl(filename, {
+        width: 150,
+        height: 150,
+        crop: 'fill',
+        quality: 'auto',
+        format: 'auto'
+      });
+    }
+
+    res.status(200).json(responseData);
   } catch (error) {
     console.error('❌ Image upload error:', error);
     console.error('❌ Error details:', {

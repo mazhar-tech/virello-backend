@@ -32,7 +32,12 @@ const storage = new CloudinaryStorage({
     transformation: [
       { width: 800, height: 600, crop: 'limit' },
       { quality: 'auto' }
-    ]
+    ],
+    public_id: (req, file) => {
+      // Generate unique filename with timestamp
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      return `image-${uniqueSuffix}`;
+    }
   }
 });
 
