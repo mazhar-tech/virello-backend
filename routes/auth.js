@@ -1015,7 +1015,9 @@ router.post('/reset-password', [
     }
 
     // Update password and clear reset OTP
-    user.password = newPassword;
+    // Hash the new password before saving
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    user.password = hashedPassword;
     user.passwordResetOTP = null;
     user.passwordResetOTPExpires = null;
     await user.save();
