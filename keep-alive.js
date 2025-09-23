@@ -3,8 +3,8 @@
 /**
  * Keep-Alive Service for Render Backend
  * 
- * This script pings the backend health endpoint every 10 minutes
- * to prevent Render from going idle (which happens after 10 minutes of inactivity).
+ * This script pings the backend health endpoint every 4 minutes
+ * to prevent Render from going idle (which happens after 5 minutes of inactivity).
  * 
  * Usage:
  *   node keep-alive.js
@@ -20,8 +20,8 @@ const CONFIG = {
   // Backend URL - Update this with your Render backend URL
   BACKEND_URL: process.env.BACKEND_URL || 'https://virello-backend.onrender.com',
   
-  // Ping interval in milliseconds (10 minutes = 600,000 ms)
-  PING_INTERVAL: 9 * 60 * 1000, // 10 minutes
+  // Ping interval in milliseconds (4 minutes = 240,000 ms)
+  PING_INTERVAL: 4 * 60 * 1000, // 4 minutes (less than Render's 5-minute sleep)
   
   // Health endpoint path
   HEALTH_ENDPOINT: '/health',
@@ -108,10 +108,14 @@ class KeepAliveService {
       this.log(`Pinging backend: ${url} (attempt ${retryCount + 1})`);
       
       const response = await axios.get(url, {
-        timeout: 10000, // 10 second timeout
+        timeout: 30000, // 30 second timeout (increased for Render's cold start)
         headers: {
           'User-Agent': 'Keep-Alive-Service/1.0',
         },
+        // Add retry configuration
+        validateStatus: function (status) {
+          return status >= 200 && status < 500; // Accept 2xx and 4xx, retry on 5xx
+        }
       });
 
       if (response.status === 200) {

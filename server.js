@@ -7,10 +7,14 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
+const AutoKeepAlive = require('./auto-keepalive');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Initialize Auto Keep-Alive Service
+let autoKeepAlive = null;
 
 // Trust proxy for rate limiting behind reverse proxy
 app.set('trust proxy', 1);
@@ -134,6 +138,23 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// Auto keep-alive status endpoint
+app.get('/keepalive-status', (req, res) => {
+  if (autoKeepAlive) {
+    res.status(200).json({
+      status: 'enabled',
+      ...autoKeepAlive.getStatus()
+    });
+  } else {
+    res.status(200).json({
+      status: 'disabled',
+      message: 'Auto keep-alive service is not running',
+      environment: process.env.NODE_ENV || 'development',
+      enableAutoKeepAlive: process.env.ENABLE_AUTO_KEEPALIVE
+    });
+  }
 });
 
 // CORS test endpoint
@@ -261,14 +282,25 @@ const connectDB = async () => {
 const startServer = async () => {
   const dbConnected = await connectDB();
   
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/health`);
     console.log(`🔗 API base: http://localhost:${PORT}/api`);
     if (!dbConnected) {
       console.log('⚠️  Database-dependent routes will return errors');
     }
+    
+    // Start Auto Keep-Alive Service (only in production or when explicitly enabled)
+    if (process.env.NODE_ENV === 'production' || process.env.ENABLE_AUTO_KEEPALIVE === 'true') {
+      console.log('🔧 Starting Auto Keep-Alive Service...');
+      autoKeepAlive = new AutoKeepAlive(PORT, false); // false for HTTP, true for HTTPS
+      await autoKeepAlive.start();
+    } else {
+      console.log('💡 Auto Keep-Alive Service disabled (set ENABLE_AUTO_KEEPALIVE=true to enable)');
+    }
   });
+  
+  return server;
 };
 
 startServer();
@@ -277,6 +309,11 @@ startServer();
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
   try {
+    // Stop auto keep-alive service
+    if (autoKeepAlive) {
+      autoKeepAlive.stop();
+    }
+    
     if (mongoose.connection.readyState === 1) {
       await mongoose.connection.close();
       console.log('MongoDB connection closed');
@@ -291,6 +328,11 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully');
   try {
+    // Stop auto keep-alive service
+    if (autoKeepAlive) {
+      autoKeepAlive.stop();
+    }
+    
     if (mongoose.connection.readyState === 1) {
       await mongoose.connection.close();
       console.log('MongoDB connection closed');

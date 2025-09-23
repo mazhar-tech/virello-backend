@@ -16,7 +16,9 @@
     "cleanup": "node cleanup.js",
     "restart": "npm run clean && npm start",
     "keep-alive": "node keep-alive.js",
-    "keep-alive-start": "BACKEND_URL=https://virello-backend.onrender.com node keep-alive.js"
+    "keep-alive-start": "BACKEND_URL=https://virello-backend.onrender.com node keep-alive.js",
+    "test-keepalive": "node test-keepalive.js",
+    "start-with-keepalive": "ENABLE_AUTO_KEEPALIVE=true npm start"
   },
   "dependencies": {
     "axios": "^1.11.0",

@@ -230,6 +230,139 @@ router.get('/', [
   }
 });
 
+// @route   POST /api/products/upload-image
+// @desc    Upload product image (cloud storage in production, local in development)
+// @access  Private (Admin only)
+router.post('/upload-image', (req, res, next) => {
+  console.log('🔧 Upload endpoint - Pre-auth middleware');
+  console.log('  Request headers:', req.headers);
+  console.log('  Authorization header:', req.headers.authorization);
+  next();
+}, auth, adminAuth, upload.single('image'), imagekitUtils.handleMulterError, async (req, res) => {
+  // Set longer timeout for file uploads
+  req.setTimeout(120000); // 2 minutes
+  res.setTimeout(120000); // 2 minutes
+  
+  console.log('🔧 Upload endpoint called at:', new Date().toISOString());
+  console.log('🔧 Upload endpoint - Environment check:');
+  console.log('  NODE_ENV:', process.env.NODE_ENV);
+  console.log('  isProduction:', isProduction);
+  console.log('  useCloudStorage:', useCloudStorage);
+  console.log('  imagekitUtils available:', !!imagekitUtils);
+  console.log('  isImageKitConfigured:', isImageKitConfigured);
+  console.log('  IMAGEKIT_URL_ENDPOINT exists:', !!process.env.IMAGEKIT_URL_ENDPOINT);
+  console.log('  IMAGEKIT_PRIVATE_KEY exists:', !!process.env.IMAGEKIT_PRIVATE_KEY);
+  console.log('  IMAGEKIT_PUBLIC_KEY exists:', !!process.env.IMAGEKIT_PUBLIC_KEY);
+
+  console.log('  File received:', !!req.file);
+  
+  try {
+
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No file uploaded',
+        details: 'Please select an image file'
+      });
+    }
+
+    // Check if we have proper storage configuration
+    if (!storage || !upload) {
+      console.error('❌ Storage configuration error: storage or upload not properly configured');
+      return res.status(500).json({
+        error: 'Storage configuration error',
+        details: 'Image storage is not properly configured. Please contact administrator.'
+      });
+    }
+
+    console.log('🔧 Upload file received:', {
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+
+    let imageUrl, filename, storageType;
+
+    if (useCloudStorage && isImageKitConfigured) {
+      // Cloud storage (production) - ImageKit
+      try {
+        // Upload to ImageKit using the buffer
+        const uploadResult = await imagekitUtils.uploadImage(req.file, 'virello-products');
+        imageUrl = uploadResult.url;
+        filename = uploadResult.fileId;
+        storageType = 'imagekit';
+        
+        console.log('🔧 Products: Using ImageKit storage:', imageUrl);
+        console.log('🔧 ImageKit upload successful:', {
+          fileId: uploadResult.fileId,
+          url: uploadResult.url,
+          name: uploadResult.name,
+          size: uploadResult.size,
+          width: uploadResult.width,
+          height: uploadResult.height,
+          folder: 'virello-products'
+        });
+      } catch (imagekitError) {
+        console.error('❌ ImageKit upload error:', imagekitError);
+        return res.status(500).json({
+          error: 'ImageKit upload failed',
+          details: imagekitError.message
+        });
+      }
+    } else {
+      // Local storage (temporary solution for Render.com)
+      // Use Render.com domain for image URLs
+      // Use optimized image endpoint for better performance
+      const baseUrl = 'https://virello-backend.onrender.com';
+      console.log('🔧 Base URL being used:', baseUrl);
+      console.log('🔧 Filename:', req.file.filename);
+      imageUrl = `${baseUrl}/api/products/optimized-image/${req.file.filename}`;
+      console.log('🔧 Final optimized image URL:', imageUrl);
+      filename = req.file.filename;
+      storageType = 'local-render.com';
+      
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
+      console.log('🔧 Products: Using local storage with Render.com URL:', imageUrl);
+    }
+    
+    // Prepare response data
+    const responseData = {
+      message: `Image uploaded to ${storageType} storage successfully`,
+      imageUrl: imageUrl,
+      filename: filename,
+      storage: storageType
+    };
+
+    // Add optimized URL for ImageKit
+    if (storageType === 'imagekit' && isImageKitConfigured) {
+      responseData.optimizedImageUrl = imagekitUtils.getOptimizedImageUrl(filename, {
+        width: 400,
+        height: 300,
+        crop: 'maintain_ratio',
+        quality: 80,
+        format: 'auto'
+      });
+      responseData.thumbnailUrl = imagekitUtils.getOptimizedImageUrl(filename, {
+        width: 150,
+        height: 150,
+        crop: 'maintain_ratio',
+        quality: 75,
+        format: 'auto'
+      });
+    }
+
+    res.status(200).json(responseData);
+  } catch (error) {
+    console.error('❌ Image upload error:', error);
+    res.status(500).json({
+      error: 'Image upload failed',
+      details: error.message
+    });
+  }
+});
+
 // @route   GET /api/products/:id
 // @desc    Get product by ID
 // @access  Public
@@ -580,7 +713,7 @@ router.delete('/:id', auth, adminAuth, async (req, res) => {
         const folderPath = 'virello-products/' + publicId;
         
         console.log('🗑️ Deleting image from Cloudinary:', folderPath);
-        await cloudinaryUtils.deleteImage(folderPath);
+        await imagekitUtils.deleteImage(folderPath);
         console.log('✅ Image deleted from Cloudinary successfully');
       } catch (imageDeleteError) {
         console.error('⚠️ Failed to delete image from Cloudinary:', imageDeleteError.message);
@@ -750,43 +883,43 @@ router.get('/test-cloudinary', auth, adminAuth, async (req, res) => {
   try {
     console.log('🔧 Testing Cloudinary connectivity...');
     
-    if (!cloudinaryUtils) {
+    if (!imagekitUtils) {
       return res.status(500).json({
-        error: 'Cloudinary not configured',
-        details: 'Cloudinary utilities not available'
+        error: 'ImageKit not configured',
+        details: 'ImageKit utilities not available'
       });
     }
 
-    // Test Cloudinary API
-    const testResult = await cloudinaryUtils.testCloudinaryConnection();
-    console.log('🔧 Cloudinary ping result:', testResult);
+    // Test ImageKit API
+    const testResult = await imagekitUtils.testImageKitConnection();
+    console.log('🔧 ImageKit ping result:', testResult);
     
     res.json({
-      message: 'Cloudinary test successful',
+      message: 'ImageKit test successful',
       result: testResult,
       environment: {
         NODE_ENV: process.env.NODE_ENV,
         isProduction: isProduction,
         useCloudStorage: useCloudStorage,
-        cloudinaryConfigured: isCloudinaryConfigured,
-        cloudinaryUtilsAvailable: !!cloudinaryUtils,
+        imagekitConfigured: isImageKitConfigured,
+        imagekitUtilsAvailable: !!imagekitUtils,
         storageConfigured: !!storage,
         uploadConfigured: !!upload
       }
     });
   } catch (error) {
-    console.error('❌ Cloudinary test failed:', error);
+    console.error('❌ ImageKit test failed:', error);
     res.status(500).json({
-      error: 'Cloudinary test failed',
+      error: 'ImageKit test failed',
       details: error.message
     });
   }
 });
 
-// @route   POST /api/products/upload-image
-// @desc    Upload product image (cloud storage in production, local in development)
-// @access  Private (Admin only)
-router.post('/upload-image', (req, res, next) => {
+// @route   GET /api/products/upload-health
+// @desc    Check upload endpoint health
+// @access  Public
+router.get('/upload-health', (req, res) => {
   console.log('🔧 Upload endpoint - Pre-auth middleware');
   console.log('  Request headers:', req.headers);
   console.log('  Authorization header:', req.headers.authorization);
@@ -801,7 +934,7 @@ router.post('/upload-image', (req, res, next) => {
   console.log('  NODE_ENV:', process.env.NODE_ENV);
   console.log('  isProduction:', isProduction);
   console.log('  useCloudStorage:', useCloudStorage);
-  console.log('  cloudinaryUtils available:', !!cloudinaryUtils);
+  console.log('  imagekitUtils available:', !!imagekitUtils);
   console.log('  isCloudinaryConfigured:', isCloudinaryConfigured);
   console.log('  CLOUDINARY_URL exists:', !!process.env.CLOUDINARY_URL);
   console.log('  CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
@@ -890,20 +1023,20 @@ router.post('/upload-image', (req, res, next) => {
       storage: storageType
     };
 
-    // Add optimized URL for Cloudinary
-    if (storageType === 'cloudinary' && isCloudinaryConfigured) {
-      responseData.optimizedImageUrl = cloudinaryUtils.getOptimizedImageUrl(filename, {
+    // Add optimized URL for ImageKit
+    if (storageType === 'imagekit' && isImageKitConfigured) {
+      responseData.optimizedImageUrl = imagekitUtils.getOptimizedImageUrl(filename, {
         width: 400,
         height: 300,
-        crop: 'fill',
-        quality: 'auto',
+        crop: 'maintain_ratio',
+        quality: 80,
         format: 'auto'
       });
-      responseData.thumbnailUrl = cloudinaryUtils.getOptimizedImageUrl(filename, {
+      responseData.thumbnailUrl = imagekitUtils.getOptimizedImageUrl(filename, {
         width: 150,
         height: 150,
-        crop: 'fill',
-        quality: 'auto',
+        crop: 'maintain_ratio',
+        quality: 75,
         format: 'auto'
       });
     }
