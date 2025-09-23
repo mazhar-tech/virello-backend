@@ -52,13 +52,21 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'https://virellofoods.com',
       'https://www.virellofoods.com',
-      'https://virello-backend.onrender.com'
-    ];
+      'https://virello-backend.onrender.com',
+      // Add environment variable support
+      process.env.FRONTEND_URL,
+      process.env.NEXT_PUBLIC_FRONTEND_URL
+    ].filter(Boolean); // Remove undefined values
+    
+    console.log('🔧 CORS check - Origin:', origin);
+    console.log('🔧 CORS check - Allowed origins:', allowedOrigins);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('✅ CORS allowed for origin:', origin);
       callback(null, true);
     } else {
       console.log('🚫 CORS blocked origin:', origin);
+      console.log('🚫 Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
