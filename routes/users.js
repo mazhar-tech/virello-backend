@@ -11,12 +11,16 @@ router.get('/profile', auth, async (req, res) => {
   try {
 
 
-    const user = await User.findById(req.user.userId).select('-password');
+    const user = await User.findOne({ 
+      _id: req.user.userId, 
+      isActive: true, 
+      isEmailVerified: true 
+    }).select('-password');
     
     if (!user) {
       return res.status(404).json({
         error: 'User not found',
-        details: 'User does not exist'
+        details: 'User does not exist or email not verified'
       });
     }
 

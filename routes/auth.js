@@ -451,43 +451,63 @@ router.post('/login', [
 
     const { email, password } = req.body;
 
-
+    console.log('📥 Login request received:', { email, passwordLength: password?.length });
 
     // Try database connection if available
     try {
-      // Check if user exists
-      const user = await User.findOne({ email, isActive: true });
-      if (!user) {
+      // First check if user exists at all
+      const userExists = await User.findOne({ email, isActive: true });
+      
+      if (!userExists) {
+        console.log('❌ User not found:', email);
         return res.status(401).json({
-          error: 'Authentication failed',
-          details: 'Invalid credentials'
+          error: 'User not found',
+          details: 'User does not exist. Please sign up first.',
+          action: 'signup'
         });
       }
 
-      // Check if email is verified (skip for admin users)
-      if (!user.isEmailVerified && !user.isAdmin && user.role !== 'admin') {
+      // Check if user exists but email is not verified
+      if (!userExists.isEmailVerified) {
+        console.log('❌ User exists but email not verified:', email);
         return res.status(401).json({
           error: 'Email not verified',
-          details: 'Please verify your email before logging in'
+          details: 'Please verify your email before logging in.',
+          action: 'verify_email'
         });
       }
 
+      // User exists and is verified, proceed with login
+      const user = userExists;
+
+      console.log('✅ Verified user found:', user.email);
+      console.log('📧 User email verified:', user.isEmailVerified);
+      console.log('👑 User is admin:', user.isAdmin);
+      console.log('🔐 User role:', user.role);
+
       // Check password
+      console.log('🔐 Checking password for user:', user.email);
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
+        console.log('❌ Password mismatch for user:', user.email);
         return res.status(401).json({
           error: 'Authentication failed',
           details: 'Invalid credentials'
         });
       }
+
+      console.log('✅ Password verified for user:', user.email);
 
       // Generate token
       const token = generateToken(user._id);
+      console.log('🎫 Token generated for user:', user.email);
 
       // Update last login
       user.lastLogin = new Date();
       await user.save();
+      console.log('✅ Last login updated for user:', user.email);
 
+      console.log('🎉 Login successful for user:', user.email);
       res.json({
         success: true,
         message: 'Login successful',
@@ -518,6 +538,67 @@ router.post('/login', [
     res.status(500).json({
       error: 'Server Error',
       details: 'Failed to authenticate user'
+    });
+  }
+});
+
+// @route   POST /api/auth/check-user
+// @desc    Check if user exists and verification status
+// @access  Public
+router.post('/check-user', [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        details: errors.array()
+      });
+    }
+
+    const { email } = req.body;
+    console.log('📥 Check user request received:', email);
+
+    // Check if user exists
+    const user = await User.findOne({ email, isActive: true });
+    
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.json({
+        exists: false,
+        verified: false,
+        action: 'signup',
+        message: 'User does not exist. Please sign up first.'
+      });
+    }
+
+    if (!user.isEmailVerified) {
+      console.log('❌ User exists but email not verified:', email);
+      return res.json({
+        exists: true,
+        verified: false,
+        action: 'verify_email',
+        message: 'User exists but email not verified. Please verify your email.'
+      });
+    }
+
+    console.log('✅ User exists and is verified:', email);
+    return res.json({
+      exists: true,
+      verified: true,
+      action: 'login',
+      message: 'User exists and is verified. You can login.'
+    });
+
+  } catch (error) {
+    console.error('Check user error:', error);
+    res.status(500).json({
+      error: 'Server Error',
+      details: 'Failed to check user status'
     });
   }
 });
@@ -579,12 +660,17 @@ router.get('/me', auth, async (req, res) => {
   try {
 
 
-    // For real users, query the database
-    const user = await User.findById(req.user.userId).select('-password');
+    // For real users, query the database - only return verified users
+    const user = await User.findOne({ 
+      _id: req.user.userId, 
+      isActive: true, 
+      isEmailVerified: true 
+    }).select('-password');
+    
     if (!user) {
       return res.status(404).json({
         error: 'User not found',
-        details: 'User does not exist'
+        details: 'User does not exist or email not verified'
       });
     }
 
@@ -732,8 +818,12 @@ router.put('/profile', [
 
     console.log('Update data prepared:', updateData);
 
-    const user = await User.findByIdAndUpdate(
-      req.user.userId,
+    const user = await User.findOneAndUpdate(
+      { 
+        _id: req.user.userId, 
+        isActive: true, 
+        isEmailVerified: true 
+      },
       updateData,
       { new: true, runValidators: true }
     ).select('-password');
@@ -743,7 +833,7 @@ router.put('/profile', [
     if (!user) {
       return res.status(404).json({
         error: 'User not found',
-        details: 'User does not exist'
+        details: 'User does not exist or email not verified'
       });
     }
 
